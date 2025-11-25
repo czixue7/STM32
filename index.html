@@ -1,0 +1,2923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STM32云监测系统</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #4cc9f0;
+            --primary-light: #4895ef;
+            --secondary-color: #4361ee;
+            --success-color: #4ade80;
+            --success-dark: #22c55e;
+            --danger-color: #f72585;
+            --warning-color: #f8961e;
+            --dark-color: #0f172a;
+            --light-color: #f1f5f9;
+            --background-color: rgba(15, 23, 42, 0.4);
+            --card-color: rgba(30, 41, 59, 0.3);
+            --text-color: #e2e8f0;
+            --text-light: #94a3b8;
+            --border-color: rgba(71, 85, 105, 0.3);
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            --shadow-hover: 0 10px 15px rgba(0, 0, 0, 0.3);
+            --glow: 0 0 10px rgba(76, 201, 240, 0.4);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Inter', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--dark-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            font-size: 15px;
+            overflow-x: hidden;
+            position: relative;
+            min-height: 100vh;
+        }
+        
+        /* 粒子背景 - 增强可见性 */
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 30px 20px;
+            background: linear-gradient(135deg, rgba(76, 201, 240, 0.7), rgba(67, 97, 238, 0.7));
+            color: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow), var(--glow);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.1)"/></svg>');
+            background-size: cover;
+        }
+        
+        h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            position: relative;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .subtitle {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            font-weight: 300;
+            position: relative;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        
+        /* 主要面板毛玻璃效果 */
+        .config-panel, .data-panel, .chart-panel, .control-section {
+            background: var(--card-color);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+        }
+        
+        .config-panel:hover, .data-panel:hover, .chart-panel:hover, .control-section:hover {
+            box-shadow: var(--shadow-hover), var(--glow);
+            transform: translateY(-5px);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .chart-controls {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .time-range-selector, .data-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .time-range-selector select, .data-selector select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            width: auto;
+            min-width: 120px;
+            background: rgba(30, 41, 59, 0.5);
+            color: var(--text-color);
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            backdrop-filter: blur(5px);
+        }
+        
+        .panel-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 18px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: var(--text-color);
+            font-size: 0.95rem;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.3s;
+            background: rgba(30, 41, 59, 0.5);
+            color: var(--text-color);
+            backdrop-filter: blur(5px);
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.2);
+        }
+        
+        /* 控制名称输入框边框为白色 */
+        #new-control-name, #new-control-name-number {
+            border-color: white;
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            backdrop-filter: blur(5px);
+        }
+        
+        button:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        button.connect {
+            background-color: var(--success-dark);
+        }
+        
+        button.connect:hover {
+            background-color: var(--success-color);
+        }
+        
+        button.disconnect {
+            background-color: var(--danger-color);
+        }
+        
+        button.disconnect:hover {
+            background-color: #e01e5a;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn-group button {
+            flex: 1;
+        }
+        
+        .data-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* 数据卡片毛玻璃效果 */
+        .data-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            color: white;
+            position: relative;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .data-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 1;
+        }
+        
+        .data-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        /* 数据卡片背景 - 使用半透明颜色 */
+        .temperature {
+            background: linear-gradient(135deg, rgba(255, 107, 107, 0.7), rgba(255, 142, 142, 0.7));
+        }
+        
+        .humidity {
+            background: linear-gradient(135deg, rgba(76, 201, 240, 0.7), rgba(72, 149, 239, 0.7));
+        }
+        
+        .light-intensity {
+            background: linear-gradient(135deg, rgba(249, 199, 79, 0.7), rgba(248, 150, 30, 0.7));
+        }
+        
+        .growth-confidence {
+            background: linear-gradient(135deg, rgba(144, 190, 109, 0.7), rgba(67, 170, 139, 0.7));
+        }
+        
+        .growth-stage {
+            background: linear-gradient(135deg, rgba(87, 117, 144, 0.7), rgba(77, 144, 142, 0.7));
+        }
+        
+        .custom-data-1 {
+            background: linear-gradient(135deg, rgba(243, 114, 44, 0.7), rgba(248, 150, 30, 0.7));
+        }
+        
+        .custom-data-2 {
+            background: linear-gradient(135deg, rgba(39, 125, 161, 0.7), rgba(87, 117, 144, 0.7));
+        }
+        
+        .custom-data-3 {
+            background: linear-gradient(135deg, rgba(67, 170, 139, 0.7), rgba(144, 190, 109, 0.7));
+        }
+        
+        .data-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .data-label {
+            font-size: 1.2rem;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .data-key {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-top: 5px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .remove-data-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 3;
+        }
+        
+        .remove-data-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(1.1);
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+        }
+        
+        .disconnected {
+            background-color: var(--danger-color);
+        }
+        
+        .message-log-container {
+            position: relative;
+        }
+        
+        .message-log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .message-log {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            background-color: rgba(15, 23, 42, 0.3);
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            backdrop-filter: blur(10px);
+        }
+        
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        .incoming {
+            background-color: rgba(76, 201, 240, 0.2);
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .outgoing {
+            background-color: rgba(34, 197, 94, 0.2);
+            border-left: 3px solid var(--success-color);
+        }
+        
+        .error {
+            background-color: rgba(247, 37, 133, 0.2);
+            border-left: 3px solid var(--danger-color);
+        }
+        
+        .timestamp {
+            color: var(--text-light);
+            font-size: 0.8rem;
+        }
+        
+        .clear-log-btn {
+            background-color: var(--warning-color);
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        
+        .clear-log-btn:hover {
+            background-color: #e67e22;
+        }
+        
+        /* 控制面板样式优化 */
+        .control-section {
+            margin-top: 30px;
+            transition: all 0.3s ease;
+        }
+        
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        /* 控制卡片毛玻璃效果 */
+        .control-card {
+            text-align: center;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            position: relative;
+            transition: transform 0.3s, box-shadow 0.3s;
+            background: var(--card-color);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(15px);
+        }
+        
+        .control-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .control-button {
+            padding: 8px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: rgba(71, 85, 105, 0.3);
+            color: var(--text-color);
+            transition: background-color 0.3s;
+            font-size: 0.85rem;
+            backdrop-filter: blur(5px);
+        }
+        
+        .control-button.active {
+            background-color: var(--success-dark);
+            color: white;
+        }
+        
+        .control-button.inactive {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .rgb-control {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .rgb-slider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .rgb-slider input {
+            flex: 1;
+        }
+        
+        .rgb-preview {
+            width: 100%;
+            height: 35px;
+            border-radius: 5px;
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(5px);
+        }
+        
+        .send-rgb-btn {
+            margin-top: 8px;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+        
+        /* 修改控制面板删除按钮为X */
+        .remove-control-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: var(--danger-color);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px; /* 增加字体大小 */
+            font-weight: bold;
+            transition: all 0.3s;
+            line-height: 1;
+            padding: 0;
+            z-index: 2;
+        }
+        
+        .remove-control-btn:hover {
+            background: #c0392b;
+            transform: scale(1.1);
+        }
+        
+        .control-key {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+        
+        /* 自定义面板毛玻璃效果 */
+        .custom-panel {
+            background: rgba(30, 41, 59, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(15px);
+        }
+        
+        .custom-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .custom-form input {
+            padding: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .add-btn {
+            background-color: var(--success-dark);
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+        
+        /* 修改控制选项布局，改为并排显示 */
+        .control-options-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .control-options {
+            padding: 10px;
+            background-color: rgba(30, 41, 59, 0.3);
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-options-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .char-options, .number-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex-grow: 1;
+        }
+        
+        .reset-default-btn {
+            background-color: var(--warning-color);
+            margin-top: 10px;
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+        
+        .json-key-input {
+            margin-top: 8px;
+            padding: 6px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            width: 100%;
+        }
+        
+        .button-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .button-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px;
+            background: rgba(71, 85, 105, 0.3);
+            border-radius: 4px;
+            position: relative;
+            backdrop-filter: blur(5px);
+        }
+        
+        .button-control input {
+            flex: 1;
+            padding: 4px;
+            font-size: 0.8rem;
+        }
+        
+        /* 修改按钮控制删除按钮为X */
+        .remove-button-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px; /* 增加字体大小 */
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* 修改添加按钮布局，使其水平对齐 */
+        .add-button-btn, .add-number-control-btn {
+            background: var(--success-dark);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-top: auto; /* 使用auto margin使其对齐 */
+            width: 100%;
+        }
+        
+        .edit-control-btn {
+            position: absolute;
+            top: 6px;
+            right: 32px;
+            background: var(--warning-color);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            transition: all 0.3s;
+            line-height: 1;
+            padding: 0;
+            z-index: 2;
+        }
+        
+        .edit-control-btn:hover {
+            background: #e67e22;
+            transform: scale(1.1);
+        }
+        
+        /* 数值控制样式优化 */
+        .number-controls-container {
+            margin-top: 10px;
+        }
+        
+        .number-control-item {
+            background: rgba(71, 85, 105, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(5px);
+        }
+        
+        .number-control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .number-control-label {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        /* 修改数值控制删除按钮为X */
+        .remove-number-control-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            font-size: 12px; /* 增加字体大小 */
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .number-control-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .number-control-options input {
+            padding: 6px;
+            font-size: 0.8rem;
+            pointer-events: auto !important;
+        }
+        
+        .control-type-select {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+        
+        .control-type-btn {
+            flex: 1;
+            padding: 5px;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            background: rgba(71, 85, 105, 0.3);
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        
+        .control-type-btn.selected {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .control-input-container {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .control-input-container input {
+            flex: 1;
+            padding: 6px;
+            font-size: 0.8rem;
+            pointer-events: auto !important;
+        }
+        
+        .send-number-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .number-value-display {
+            min-width: 30px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        /* 确保数值控制中的输入框可以正常交互 */
+        .number-control-input, .number-control-name, .number-control-key, 
+        .number-control-min, .number-control-max {
+            pointer-events: auto !important;
+            background-color: rgba(30, 41, 59, 0.5) !important;
+        }
+        
+        /* 修改控制名称输入框的边框为白色 */
+        #new-control-name, #new-control-name-number {
+            border: 1px solid white;
+        }
+        
+        /* 新增样式：自定义数据面板按钮布局 */
+        .data-buttons-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .data-buttons-container .add-btn {
+            width: 48%;
+        }
+        
+        .data-buttons-container .reset-default-btn {
+            width: 48%;
+            margin-top: 0;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .data-display {
+                grid-template-columns: 1fr;
+            }
+            
+            .control-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .custom-form {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-controls {
+                justify-content: flex-start;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .config-panel, .data-panel, .chart-panel, .control-section {
+                padding: 20px;
+            }
+            
+            /* 在小屏幕上改为垂直布局 */
+            .control-options-container {
+                grid-template-columns: 1fr;
+            }
+            
+            /* 移动端数据按钮布局 */
+            .data-buttons-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .data-buttons-container .add-btn,
+            .data-buttons-container .reset-default-btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 粒子背景容器 -->
+    <div id="particles-js"></div>
+    
+    <div class="container">
+        <header>
+            <h1>STM32云监测系统</h1>
+            <p class="subtitle">实时数据监控与设备控制</p>
+        </header>
+        
+        <div class="dashboard">
+            <div class="config-panel">
+                <h2 class="panel-title">MQTT配置</h2>
+                
+                <div class="form-group">
+                    <label for="broker">MQTT代理地址</label>
+                    <input type="text" id="broker" placeholder="例如: localhost" value="localhost">
+                </div>
+                
+                <div class="form-group">
+                    <label for="port">端口</label>
+                    <select id="port">
+                        <option value="8083" selected>8083 (WebSocket)</option>
+                        <option value="8084">8084 (WebSocket TLS)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="client-id">客户端ID (可选)</label>
+                    <input type="text" id="client-id" placeholder="留空将自动生成">
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">用户名 (可选)</label>
+                    <input type="text" id="username" placeholder="MQTT用户名">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">密码 (可选)</label>
+                    <input type="password" id="password" placeholder="MQTT密码">
+                </div>
+                
+                <div class="form-group">
+                    <label for="subscribe-topic">订阅主题</label>
+                    <input type="text" id="subscribe-topic" placeholder="例如: /client/data" value="/client/data">
+                </div>
+                
+                <div class="form-group">
+                    <label for="publish-topic">发布主题</label>
+                    <input type="text" id="publish-topic" placeholder="例如: /client/control" value="/client/control">
+                </div>
+                
+                <div class="btn-group">
+                    <button id="save-config" class="save">保存配置</button>
+                    <button id="connect-btn" class="connect">连接</button>
+                    <button id="disconnect-btn" class="disconnect" disabled>断开连接</button>
+                </div>
+            </div>
+            
+            <div class="data-panel">
+                <h2 class="panel-title">实时数据</h2>
+                
+                <div class="status-indicator">
+                    <div class="status-dot disconnected" id="status-dot"></div>
+                    <span id="status-text">未连接</span>
+                </div>
+                
+                <!-- 实时数据展示区域 -->
+                <div class="data-display" id="data-display">
+                    <!-- 默认的温度和湿度 - 现在可以删除 -->
+                    <div class="data-card temperature" id="temperature-card">
+                        <button class="remove-data-btn" onclick="removeDataCard('temperature')">X</button>
+                        <div class="data-label">温度</div>
+                        <div class="data-value" id="temperature-value">-- °C</div>
+                        <div class="data-key">键名: temperature</div>
+                        <div class="data-timestamp" id="temperature-time">--</div>
+                    </div>
+                    
+                    <div class="data-card humidity" id="humidity-card">
+                        <button class="remove-data-btn" onclick="removeDataCard('humidity')">X</button>
+                        <div class="data-label">湿度</div>
+                        <div class="data-value" id="humidity-value">-- %</div>
+                        <div class="data-key">键名: humidity</div>
+                        <div class="data-timestamp" id="humidity-time">--</div>
+                    </div>
+                </div>
+                
+                <!-- 自定义数据添加面板 -->
+                <div class="custom-panel">
+                    <h3>添加自定义数据指标</h3>
+                    <div class="custom-form">
+                        <input type="text" id="new-data-name" placeholder="数据名称">
+                        <input type="text" id="new-data-key" placeholder="数据键名 (JSON中的key)">
+                        <input type="text" id="new-data-unit" placeholder="单位 (例如: °C, %)">
+                    </div>
+                    <!-- 修改后的按钮容器 -->
+                    <div class="data-buttons-container">
+                        <button class="add-btn" id="add-data-btn">添加</button>
+                        <button class="reset-default-btn" id="reset-default-btn">重置默认数据卡片</button>
+                    </div>
+                </div>
+                
+                <div class="message-log-container">
+                    <div class="message-log-header">
+                        <h3>消息日志</h3>
+                        <button class="clear-log-btn" id="clear-log-btn">清除日志</button>
+                    </div>
+                    <div class="message-log" id="message-log">
+                        <!-- 消息将在这里显示 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加数据趋势图表面板 -->
+        <div class="chart-panel">
+            <h2 class="panel-title">数据趋势</h2>
+            
+            <!-- 图表控制面板 - 修改为右侧对齐 -->
+            <div class="chart-controls">
+                <div class="time-range-selector">
+                    <label for="time-range">时间范围:</label>
+                    <select id="time-range">
+                        <option value="1">1分钟</option>
+                        <option value="5" selected>5分钟</option>
+                        <option value="10">10分钟</option>
+                        <option value="30">30分钟</option>
+                        <option value="60">1小时</option>
+                    </select>
+                </div>
+                
+                <div class="data-selector">
+                    <label for="data-display-select">显示数据:</label>
+                    <select id="data-display-select">
+                        <option value="all" selected>全部显示</option>
+                        <option value="temperature">温度</option>
+                        <option value="humidity">湿度</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="data-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="control-section">
+            <h2 style="text-align: center; margin-bottom: 15px;">控制面板</h2>
+            <div class="control-grid" id="control-grid">
+                <!-- 默认的控制按钮 - 现在可以删除 -->
+                <div class="control-card" id="buzzer-control">
+                    <button class="remove-control-btn" onclick="removeControl('buzzer')">X</button>
+                    <button class="edit-control-btn" onclick="editControl('buzzer')">✎</button>
+                    <h3>蜂鸣器</h3>
+                    <div class="control-key">JSON键名: buzzer</div>
+                    <div class="button-controls">
+                        <button class="control-button" onclick="sendJSONControl('buzzer', 'ON')" id="buzzer-on">开启</button>
+                        <button class="control-button" onclick="sendJSONControl('buzzer', 'OFF')" id="buzzer-off">关闭</button>
+                    </div>
+                </div>
+                
+                <!-- 新的RGB控制面板 - 替换为三个独立的控制项 -->
+                <div class="control-card" id="r-control">
+                    <button class="remove-control-btn" onclick="removeControl('r')">X</button>
+                    <button class="edit-control-btn" onclick="editControl('r')">✎</button>
+                    <h3>RGB灯</h3>
+                    <div class="number-controls-container">
+                        
+                        <div class="number-control-item">
+                            <div class="number-control-header">
+                                <span class="number-control-label">红色</span>
+                            </div>
+                            <div class="control-key">JSON键名: r</div>
+                            <div class="control-input-container">
+                                <input type="range" class="number-control-slider" min="0" max="255" value="0">
+                                     <span class="number-value-display">0</span>
+                                <button class="send-number-btn" onclick="sendNumberControl('r', this)">发送</button>
+                            </div>
+                        </div>
+                    
+                        <div class="number-control-item">
+                            <div class="number-control-header">
+                                <span class="number-control-label">绿色</span>
+                            </div>
+                            <div class="control-key">JSON键名: g</div>
+                            <div class="control-input-container">
+                                <input type="range" class="number-control-slider" min="0" max="255" value="0">
+                                     <span class="number-value-display">0</span>
+                                <button class="send-number-btn" onclick="sendNumberControl('g', this)">发送</button>
+                            </div>
+                        </div>
+                    
+                        <div class="number-control-item">
+                            <div class="number-control-header">
+                                <span class="number-control-label">蓝色</span>
+                            </div>
+                            <div class="control-key">JSON键名: b</div>
+                            <div class="control-input-container">
+                                <input type="range" class="number-control-slider" min="0" max="255" value="0">
+                                     <span class="number-value-display">0</span>
+                                <button class="send-number-btn" onclick="sendNumberControl('b', this)">发送</button>
+                            </div>
+                        </div>
+                    
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 自定义控制添加面板 -->
+            <div class="custom-panel">
+                <h3>添加自定义控制</h3>
+                
+                <!-- 修改为并排布局 -->
+                <div class="control-options-container">
+                    <!-- 按钮控制部分 -->
+                    <div class="control-options">
+                        <div class="control-options-title">按钮控制</div>
+                        <div class="char-options">
+                            <!-- 将控制名称输入框和添加按钮移到JSON键名之前 -->
+                            <div class="custom-form">
+                                <input type="text" id="new-control-name" placeholder="控制名称">
+                                <button class="add-btn" id="add-control-btn">添加控制</button>
+                            </div>
+                            
+                            <input type="text" id="char-json-key" class="json-key-input" placeholder="JSON键名">
+                            <div id="button-controls-container">
+                                <!-- 动态添加的按钮控制将在这里显示 -->
+                                <div class="button-control">
+                                    <input type="text" class="button-label" placeholder="按钮标签">
+                                    <input type="text" class="button-value" placeholder="按钮值">
+                                    <button class="remove-button-btn" onclick="removeButtonControl(this)">X</button>
+                                </div>
+                            </div>
+                            <button class="add-button-btn" id="add-button-btn">添加按钮</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 数值控制部分 -->
+                    <div class="control-options">
+                        <div class="control-options-title">数值控制</div>
+                        <div class="number-options">
+                            <!-- 将控制名称输入框和添加按钮移到数值控制项之前 -->
+                            <div class="custom-form">
+                                <input type="text" id="new-control-name-number" placeholder="控制名称">
+                                <button class="add-btn" id="add-control-btn-number">添加控制</button>
+                            </div>
+                            
+                            <div class="number-controls-container" id="number-controls-container">
+                                <!-- 动态添加的数值控制将在这里显示 -->
+                                <div class="number-control-item">
+                                    <div class="number-control-header">
+                                        <span class="number-control-label">数值控制项</span>
+                                        <button class="remove-number-control-btn" onclick="removeNumberControl(this)">X</button>
+                                    </div>
+                                    <div class="control-type-select">
+                                        <div class="control-type-btn selected" data-type="slider">滑块</div>
+                                        <div class="control-type-btn" data-type="input">输入框</div>
+                                    </div>
+                                    <div class="number-control-options">
+                                        <input type="text" class="number-control-name" placeholder="控制项名称">
+                                        <input type="text" class="number-control-key" placeholder="JSON键名">
+                                    </div>
+                                    <div class="number-control-options">
+                                        <input type="number" class="number-control-min" placeholder="最小值" value="0">
+                                        <input type="number" class="number-control-max" placeholder="最大值" value="100">
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="add-number-control-btn" id="add-number-control-btn">添加数值控制项</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="reset-default-btn" id="reset-controls-btn">重置默认控制</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 粒子系统库 -->
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    
+    <script>
+        // 初始化粒子背景 - 增强粒子效果
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 120, density: { enable: true, value_area: 1000 } }, // 增加粒子数量
+                color: { value: "#4cc9f0" },
+                shape: { type: "circle" },
+                opacity: { value: 0.7, random: true }, // 增加透明度
+                size: { value: 3, random: true },
+                line_linked: {
+                    enable: true,
+                    distance: 150,
+                    color: "#4cc9f0",
+                    opacity: 0.5, // 增加连线透明度
+                    width: 1
+                },
+                move: {
+                    enable: true,
+                    speed: 3, // 增加移动速度
+                    direction: "none",
+                    random: true,
+                    straight: false,
+                    out_mode: "out",
+                    bounce: false
+                }
+            },
+            interactivity: {
+                detect_on: "canvas",
+                events: {
+                    onhover: { enable: true, mode: "repulse" },
+                    onclick: { enable: true, mode: "push" },
+                    resize: true
+                }
+            },
+            retina_detect: true
+        });
+
+        // 全局变量
+        let client = null;
+        let isConnected = false;
+        let customDataCards = {};
+        let customControls = {};
+        
+        // 图表相关变量
+        let chartData = {
+            timestamps: [], // 存储时间戳
+            timeLabels: [], // 存储显示的时间标签
+            temperature: [],
+            humidity: [],
+            // 自定义数据将动态添加
+        };
+        
+        let dataChart = null;
+        
+        // 图表配置
+        let timeRange = 5; // 默认5分钟
+        let displayMode = 'all'; // 默认显示全部数据
+        
+        // DOM元素
+        const brokerInput = document.getElementById('broker');
+        const portSelect = document.getElementById('port');
+        const clientIdInput = document.getElementById('client-id');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const subscribeTopicInput = document.getElementById('subscribe-topic');
+        const publishTopicInput = document.getElementById('publish-topic');
+        
+        const saveConfigBtn = document.getElementById('save-config');
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+        const messageLog = document.getElementById('message-log');
+        const clearLogBtn = document.getElementById('clear-log-btn');
+        
+        const dataDisplay = document.getElementById('data-display');
+        const newDataNameInput = document.getElementById('new-data-name');
+        const newDataKeyInput = document.getElementById('new-data-key');
+        const newDataUnitInput = document.getElementById('new-data-unit');
+        const addDataBtn = document.getElementById('add-data-btn');
+        const resetDefaultBtn = document.getElementById('reset-default-btn');
+        
+        const controlGrid = document.getElementById('control-grid');
+        const newControlNameInput = document.getElementById('new-control-name');
+        const newControlNameInputNumber = document.getElementById('new-control-name-number');
+        const addControlBtn = document.getElementById('add-control-btn');
+        const addControlBtnNumber = document.getElementById('add-control-btn-number');
+        const resetControlsBtn = document.getElementById('reset-controls-btn');
+        
+        // 自定义控制类型选择
+        const buttonControlsContainer = document.getElementById('button-controls-container');
+        const addButtonBtn = document.getElementById('add-button-btn');
+        const numberControlsContainer = document.getElementById('number-controls-container');
+        const addNumberControlBtn = document.getElementById('add-number-control-btn');
+        
+        // 图表控制元素
+        const timeRangeSelect = document.getElementById('time-range');
+        const dataDisplaySelect = document.getElementById('data-display-select');
+        
+        // 发送JSON控制命令
+        function sendJSONControl(key, value) {
+            if (client && isConnected) {
+                const publishTopic = publishTopicInput.value;
+                // 检查值是否为数字，如果是数字则不添加引号
+                let command;
+                if (!isNaN(value) && value !== '') {
+                    command = JSON.stringify({[key]: parseFloat(value)});
+                } else {
+                    command = JSON.stringify({[key]: value});
+                }
+                client.publish(publishTopic, command);
+                addMessage(`已发送控制命令: ${command}`, 'outgoing');
+                
+                // 更新按钮状态
+                updateButtonState(key, value);
+            } else {
+                addMessage('MQTT未连接，请等待连接成功后再试', 'error');
+            }
+        }
+        
+        // 添加按钮控制
+        addButtonBtn.addEventListener('click', function() {
+            const buttonControl = document.createElement('div');
+            buttonControl.className = 'button-control';
+            buttonControl.innerHTML = `
+                <input type="text" class="button-label" placeholder="按钮标签">
+                <input type="text" class="button-value" placeholder="按钮值">
+                <button class="remove-button-btn" onclick="removeButtonControl(this)">X</button>
+            `;
+            buttonControlsContainer.appendChild(buttonControl);
+        });
+        
+        // 移除按钮控制项
+        function removeButtonControl(button) {
+            const buttonControls = document.querySelectorAll('#button-controls-container .button-control');
+            if (buttonControls.length > 1) {
+                button.closest('.button-control').remove();
+            } else {
+                addMessage('按钮控制至少需要保留一个按钮', 'error');
+            }
+        }
+        
+        // 添加数值控制项
+        addNumberControlBtn.addEventListener('click', function() {
+            const numberControlItem = document.createElement('div');
+            numberControlItem.className = 'number-control-item';
+            numberControlItem.innerHTML = `
+                <div class="number-control-header">
+                    <span class="number-control-label">数值控制项</span>
+                    <button class="remove-number-control-btn" onclick="removeNumberControl(this)">X</button>
+                </div>
+                <div class="control-type-select">
+                    <div class="control-type-btn selected" data-type="slider">滑块</div>
+                    <div class="control-type-btn" data-type="input">输入框</div>
+                </div>
+                <div class="number-control-options">
+                    <input type="text" class="number-control-name" placeholder="控制项名称">
+                    <input type="text" class="number-control-key" placeholder="JSON键名">
+                </div>
+                <div class="number-control-options">
+                    <input type="number" class="number-control-min" placeholder="最小值" value="0">
+                    <input type="number" class="number-control-max" placeholder="最大值" value="100">
+                </div>
+            `;
+            numberControlsContainer.appendChild(numberControlItem);
+            
+            // 添加控制类型选择事件
+            const controlTypeBtns = numberControlItem.querySelectorAll('.control-type-btn');
+            controlTypeBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    controlTypeBtns.forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                });
+            });
+        });
+        
+        // 移除数值控制项
+        function removeNumberControl(button) {
+            const numberControls = document.querySelectorAll('#number-controls-container .number-control-item');
+            if (numberControls.length > 1) {
+                button.closest('.number-control-item').remove();
+            } else {
+                addMessage('数值控制至少需要保留一个控制项', 'error');
+            }
+        }
+        
+        // 保存配置到本地存储
+        saveConfigBtn.addEventListener('click', function() {
+            const config = {
+                broker: brokerInput.value,
+                port: portSelect.value,
+                clientId: clientIdInput.value,
+                username: usernameInput.value,
+                password: passwordInput.value,
+                subscribeTopic: subscribeTopicInput.value,
+                publishTopic: publishTopicInput.value,
+                customDataCards: customDataCards,
+                customControls: customControls
+            };
+            
+            localStorage.setItem('mqttConfig', JSON.stringify(config));
+            addMessage('配置已保存到本地存储', 'outgoing');
+        });
+        
+        // 从本地存储加载配置
+        function loadConfig() {
+            const savedConfig = localStorage.getItem('mqttConfig');
+            if (savedConfig) {
+                const config = JSON.parse(savedConfig);
+                brokerInput.value = config.broker || 'localhost';
+                portSelect.value = config.port || '8083';
+                clientIdInput.value = config.clientId || '';
+                usernameInput.value = config.username || '';
+                passwordInput.value = config.password || '';
+                subscribeTopicInput.value = config.subscribeTopic || '/client/data';
+                publishTopicInput.value = config.publishTopic || '/client/control';
+                
+                // 加载自定义数据卡片
+                if (config.customDataCards) {
+                    customDataCards = config.customDataCards;
+                    renderCustomDataCards();
+                    // 更新数据显示选择器
+                    updateDataDisplaySelect();
+                }
+                
+                // 加载自定义控制
+                if (config.customControls) {
+                    customControls = config.customControls;
+                    renderCustomControls();
+                }
+                
+                addMessage('配置已从本地存储加载', 'incoming');
+            }
+        }
+        
+        // 渲染自定义数据卡片
+        function renderCustomDataCards() {
+            for (let key in customDataCards) {
+                if (!document.getElementById(`${key}-card`)) {
+                    createDataCard(customDataCards[key].name, key, customDataCards[key].colorClass, customDataCards[key].unit);
+                }
+            }
+        }
+        
+        // 渲染自定义控制
+        function renderCustomControls() {
+            for (let id in customControls) {
+                if (!document.getElementById(`${id}-control`)) {
+                    createControlCard(customControls[id].name, id, customControls[id].type, customControls[id].options);
+                }
+            }
+        }
+        
+        // 添加自定义数据卡片
+        addDataBtn.addEventListener('click', function() {
+            const name = newDataNameInput.value.trim();
+            const key = newDataKeyInput.value.trim();
+            const unit = newDataUnitInput.value.trim();
+            
+            if (!name || !key) {
+                addMessage('请填写数据名称和键名', 'error');
+                return;
+            }
+            
+            if (document.getElementById(`${key}-card`)) {
+                addMessage('该数据键名已存在', 'error');
+                return;
+            }
+            
+            // 选择颜色类
+            const colorClasses = ['custom-data-1', 'custom-data-2', 'custom-data-3'];
+            const colorClass = colorClasses[Object.keys(customDataCards).length % colorClasses.length];
+            
+            // 创建数据卡片
+            createDataCard(name, key, colorClass, unit);
+            
+            // 保存到自定义数据卡片对象
+            customDataCards[key] = {
+                name: name,
+                colorClass: colorClass,
+                unit: unit
+            };
+            
+            // 初始化自定义数据数组
+            if (!chartData[key]) {
+                chartData[key] = [];
+            }
+            
+            // 更新数据显示选择器
+            updateDataDisplaySelect();
+            
+            // 更新图表数据集
+            if (dataChart) {
+                addDatasetToChart(name, key, colorClass);
+            }
+            
+            // 清空输入
+            newDataNameInput.value = '';
+            newDataKeyInput.value = '';
+            newDataUnitInput.value = '';
+            
+            addMessage(`已添加数据指标: ${name}`, 'outgoing');
+        });
+        
+        // 添加数据集到图表
+        function addDatasetToChart(name, key, colorClass) {
+            const colorClasses = [
+                'rgb(75, 192, 192)',
+                'rgb(153, 102, 255)',
+                'rgb(255, 159, 64)',
+                'rgb(255, 205, 86)',
+                'rgb(201, 203, 207)'
+            ];
+            
+            const colorIndex = Object.keys(customDataCards).indexOf(key) % colorClasses.length;
+            
+            const newDataset = {
+                label: name,
+                data: chartData[key] || [],
+                borderColor: colorClasses[colorIndex],
+                backgroundColor: colorClasses[colorIndex].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                tension: 0.4,
+                fill: true,
+                hidden: displayMode !== 'all' && displayMode !== key,
+                spanGaps: false
+            };
+            
+            dataChart.data.datasets.push(newDataset);
+            dataChart.update();
+        }
+        
+        // 更新数据显示选择器
+        function updateDataDisplaySelect() {
+            // 保存当前选择的值
+            const currentValue = dataDisplaySelect.value;
+            
+            // 清空现有选项（保留"全部显示"选项）
+            dataDisplaySelect.innerHTML = '<option value="all" selected>全部显示</option>';
+            
+            // 添加默认数据选项（如果存在）
+            if (document.getElementById('temperature-card')) {
+                const tempOption = document.createElement('option');
+                tempOption.value = 'temperature';
+                tempOption.textContent = '温度';
+                dataDisplaySelect.appendChild(tempOption);
+            }
+            
+            if (document.getElementById('humidity-card')) {
+                const humidityOption = document.createElement('option');
+                humidityOption.value = 'humidity';
+                humidityOption.textContent = '湿度';
+                dataDisplaySelect.appendChild(humidityOption);
+            }
+            
+            // 添加自定义数据选项
+            for (let key in customDataCards) {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = customDataCards[key].name;
+                dataDisplaySelect.appendChild(option);
+            }
+            
+            // 恢复之前的选择（如果仍然存在）
+            if (currentValue && Array.from(dataDisplaySelect.options).some(opt => opt.value === currentValue)) {
+                dataDisplaySelect.value = currentValue;
+                displayMode = currentValue;
+            } else {
+                // 如果之前的选择不存在了，默认选择"全部显示"
+                dataDisplaySelect.value = 'all';
+                displayMode = 'all';
+            }
+            
+            // 更新图表
+            updateChart();
+        }
+        
+        // 创建数据卡片
+        function createDataCard(name, key, colorClass, unit = '') {
+            const card = document.createElement('div');
+            card.className = `data-card ${colorClass}`;
+            card.id = `${key}-card`;
+            card.innerHTML = `
+                <button class="remove-data-btn" onclick="removeDataCard('${key}')">X</button>
+                <div class="data-label">${name}</div>
+                <div class="data-value" id="${key}-value">-- ${unit}</div>
+                <div class="data-key">键名: ${key}</div>
+                <div class="data-timestamp" id="${key}-time">--</div>
+            `;
+            dataDisplay.appendChild(card);
+        }
+        
+        // 移除数据卡片 - 修复BUG：允许删除默认标签
+        function removeDataCard(key) {
+            const card = document.getElementById(`${key}-card`);
+            if (card) {
+                // 保存数据名称以便查找数据集
+                const dataName = (key === 'temperature' || key === 'humidity') ? 
+                    (key === 'temperature' ? '温度' : '湿度') : 
+                    customDataCards[key]?.name;
+                
+                card.remove();
+                
+                // 如果是自定义数据，从customDataCards中删除
+                if (customDataCards[key]) {
+                    delete customDataCards[key];
+                }
+                
+                // 从图表数据中删除对应的数据数组
+                if (chartData[key]) {
+                    delete chartData[key];
+                }
+                
+                // 从图表中移除数据集
+                if (dataChart) {
+                    const datasetIndex = dataChart.data.datasets.findIndex(dataset => dataset.label === dataName);
+                    if (datasetIndex !== -1) {
+                        dataChart.data.datasets.splice(datasetIndex, 1);
+                        dataChart.update();
+                    }
+                }
+                
+                // 更新数据显示选择器
+                updateDataDisplaySelect();
+                
+                addMessage(`已移除数据指标: ${key}`, 'outgoing');
+            }
+        }
+        
+        // 重置默认数据卡片
+        resetDefaultBtn.addEventListener('click', function() {
+            // 如果温度卡片不存在，重新创建
+            if (!document.getElementById('temperature-card')) {
+                createDataCard('温度', 'temperature', 'temperature', '°C');
+                chartData.temperature = [];
+                
+                // 添加数据集到图表
+                if (dataChart) {
+                    addDatasetToChart('温度', 'temperature', 'temperature');
+                }
+            }
+            
+            // 如果湿度卡片不存在，重新创建
+            if (!document.getElementById('humidity-card')) {
+                createDataCard('湿度', 'humidity', 'humidity', '%');
+                chartData.humidity = [];
+                
+                // 添加数据集到图表
+                if (dataChart) {
+                    addDatasetToChart('湿度', 'humidity', 'humidity');
+                }
+            }
+            
+            // 更新数据显示选择器
+            updateDataDisplaySelect();
+            
+            addMessage('已重置默认数据卡片', 'outgoing');
+        });
+        
+        // 为按钮控制添加事件
+        addControlBtn.addEventListener('click', function() {
+            addCustomControl('char');
+        });
+        
+        // 为数值控制添加事件
+        addControlBtnNumber.addEventListener('click', function() {
+            addCustomControl('number');
+        });
+        
+        // 添加自定义控制
+        function addCustomControl(selectedType) {
+            let name;
+            if (selectedType === 'char') {
+                name = newControlNameInput.value.trim();
+            } else {
+                name = newControlNameInputNumber.value.trim();
+            }
+            
+            if (!name) {
+                addMessage('请填写控制名称', 'error');
+                return;
+            }
+            
+            // 获取控制选项
+            let options = {};
+            if (selectedType === 'char') {
+                const jsonKey = document.getElementById('char-json-key').value.trim();
+                if (!jsonKey) {
+                    addMessage('请填写JSON键名', 'error');
+                    return;
+                }
+                
+                // 收集按钮配置
+                const buttonControls = document.querySelectorAll('#button-controls-container .button-control');
+                const buttons = [];
+                
+                buttonControls.forEach(control => {
+                    const label = control.querySelector('.button-label').value.trim();
+                    const value = control.querySelector('.button-value').value.trim();
+                    
+                    if (label && value) {
+                        buttons.push({
+                            label: label,
+                            value: value
+                        });
+                    }
+                });
+                
+                if (buttons.length === 0) {
+                    addMessage('请至少添加一个按钮', 'error');
+                    return;
+                }
+                
+                options = {
+                    jsonKey: jsonKey,
+                    buttons: buttons
+                };
+            } else {
+                // 收集数值控制项配置
+                const numberControls = document.querySelectorAll('#number-controls-container .number-control-item');
+                const controls = [];
+                
+                numberControls.forEach(control => {
+                    const controlName = control.querySelector('.number-control-name').value.trim();
+                    const controlKey = control.querySelector('.number-control-key').value.trim();
+                    const min = control.querySelector('.number-control-min').value.trim();
+                    const max = control.querySelector('.number-control-max').value.trim();
+                    const type = control.querySelector('.control-type-btn.selected').getAttribute('data-type');
+                    
+                    if (controlName && controlKey) {
+                        controls.push({
+                            name: controlName,
+                            key: controlKey,
+                            min: min || '0',
+                            max: max || '100',
+                            defaultValue: '0',
+                            type: type
+                        });
+                    }
+                });
+                
+                if (controls.length === 0) {
+                    addMessage('请至少添加一个数值控制项', 'error');
+                    return;
+                }
+                
+                options = {
+                    controls: controls
+                };
+            }
+            
+            // 使用JSON键名作为ID
+            const id = selectedType === 'char' ? options.jsonKey : options.controls[0].key;
+            
+            if (document.getElementById(`${id}-control`)) {
+                addMessage('该控制已存在', 'error');
+                return;
+            }
+            
+            // 创建控制卡片
+            createControlCard(name, id, selectedType, options);
+            
+            // 保存到自定义控制对象
+            customControls[id] = {
+                name: name,
+                type: selectedType,
+                options: options
+            };
+            
+            // 清空输入
+            if (selectedType === 'char') {
+                newControlNameInput.value = '';
+                document.getElementById('char-json-key').value = '';
+                
+                // 清空按钮容器
+                buttonControlsContainer.innerHTML = '';
+                // 添加一个默认按钮
+                addButtonBtn.click();
+            } else {
+                newControlNameInputNumber.value = '';
+                
+                // 清空数值控制容器
+                numberControlsContainer.innerHTML = '';
+            }
+            
+            addMessage(`已添加控制: ${name}`, 'outgoing');
+        }
+        
+        // 创建控制卡片
+        function createControlCard(name, id, type, options) {
+            const card = document.createElement('div');
+            card.className = 'control-card';
+            card.id = `${id}-control`;
+            
+            if (type === 'char') {
+                // 创建按钮控制
+                let buttonsHTML = '';
+                options.buttons.forEach(button => {
+                    buttonsHTML += `<button class="control-button" onclick="sendJSONControl('${options.jsonKey}', '${button.value}')">${button.label}</button>`;
+                });
+                
+                card.innerHTML = `
+                    <button class="remove-control-btn" onclick="removeControl('${id}')">X</button>
+                    <button class="edit-control-btn" onclick="editControl('${id}')">✎</button>
+                    <h3>${name}</h3>
+                    <div class="control-key">JSON键名: ${options.jsonKey}</div>
+                    <div class="button-controls">
+                        ${buttonsHTML}
+                    </div>
+                `;
+            } else {
+                // 创建数值控制
+                let controlsHTML = '';
+                options.controls.forEach(control => {
+                    controlsHTML += `
+                        <div class="number-control-item">
+                            <div class="number-control-header">
+                                <span class="number-control-label">${control.name}</span>
+                            </div>
+                            <div class="control-key">JSON键名: ${control.key}</div>
+                            <div class="control-input-container">
+                                ${control.type === 'slider' ? 
+                                    `<input type="range" class="number-control-slider" min="${control.min}" max="${control.max}" value="${control.defaultValue}">
+                                     <span class="number-value-display">${control.defaultValue}</span>` : 
+                                    `<input type="number" class="number-control-input" min="${control.min}" max="${control.max}" value="${control.defaultValue}">`
+                                }
+                                <button class="send-number-btn" onclick="sendNumberControl('${control.key}', this)">发送</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                card.innerHTML = `
+                    <button class="remove-control-btn" onclick="removeControl('${id}')">X</button>
+                    <button class="edit-control-btn" onclick="editControl('${id}')">✎</button>
+                    <h3>${name}</h3>
+                    <div class="number-controls-container">
+                        ${controlsHTML}
+                    </div>
+                `;
+                
+                // 为每个控制项添加独立的事件处理
+                setTimeout(() => {
+                    const controlItems = card.querySelectorAll('.number-control-item');
+                    controlItems.forEach(item => {
+                        const slider = item.querySelector('.number-control-slider');
+                        const input = item.querySelector('.number-control-input');
+                        const valueDisplay = item.querySelector('.number-value-display');
+                        
+                        // 滑块事件
+                        if (slider) {
+                            slider.addEventListener('input', function() {
+                                if (valueDisplay) {
+                                    valueDisplay.textContent = this.value;
+                                }
+                                if (input) {
+                                    input.value = this.value;
+                                }
+                            });
+                        }
+                        
+                        // 输入框事件
+                        if (input) {
+                            input.addEventListener('input', function() {
+                                if (valueDisplay) {
+                                    valueDisplay.textContent = this.value;
+                                }
+                                if (slider) {
+                                    slider.value = this.value;
+                                }
+                            });
+                        }
+                    });
+                }, 0);
+            }
+            
+            controlGrid.appendChild(card);
+        }
+        
+        // 发送数值控制命令
+        function sendNumberControl(key, button) {
+            const controlItem = button.closest('.number-control-item');
+            const slider = controlItem.querySelector('.number-control-slider');
+            const input = controlItem.querySelector('.number-control-input');
+            let value;
+            
+            if (slider) {
+                value = slider.value;
+            } else if (input) {
+                value = input.value;
+            }
+            
+            sendJSONControl(key, value);
+        }
+        
+        // 编辑控制
+        function editControl(id) {
+            let control = customControls[id];
+            
+            // 如果customControls中没有找到控制项，检查是否为默认控制项
+            if (!control) {
+                if (id === 'buzzer') {
+                    control = {
+                        name: '蜂鸣器',
+                        type: 'char',
+                        options: {
+                            jsonKey: 'buzzer',
+                            buttons: [
+                                { label: '开启', value: 'ON' },
+                                { label: '关闭', value: 'OFF' }
+                            ]
+                        }
+                    };
+                } else if (id === 'r') {
+                    control = {
+                        name: 'RGB灯',
+                        type: 'number',
+                        options: {
+                            controls: [
+                                {
+                                    name: '红色',
+                                    key: 'r',
+                                    min: '0',
+                                    max: '255',
+                                    defaultValue: '0',
+                                    type: 'slider'
+                                },
+                                {
+                                    name: '绿色',
+                                    key: 'g',
+                                    min: '0',
+                                    max: '255',
+                                    defaultValue: '0',
+                                    type: 'slider'
+                                },
+                                {
+                                    name: '蓝色',
+                                    key: 'b',
+                                    min: '0',
+                                    max: '255',
+                                    defaultValue: '0',
+                                    type: 'slider'
+                                }
+                            ]
+                        }
+                    };
+                } else {
+                    addMessage(`无法编辑控制: ${id}，未找到配置`, 'error');
+                    return;
+                }
+            }
+            
+            // 填充选项
+            if (control.type === 'char') {
+                newControlNameInput.value = control.name;
+                document.getElementById('char-json-key').value = control.options.jsonKey;
+                
+                // 清空按钮容器
+                buttonControlsContainer.innerHTML = '';
+                
+                // 添加按钮
+                control.options.buttons.forEach(button => {
+                    const buttonControl = document.createElement('div');
+                    buttonControl.className = 'button-control';
+                    buttonControl.innerHTML = `
+                        <input type="text" class="button-label" value="${button.label}" placeholder="按钮标签">
+                        <input type="text" class="button-value" value="${button.value}" placeholder="按钮值">
+                        <button class="remove-button-btn" onclick="removeButtonControl(this)">X</button>
+                    `;
+                    buttonControlsContainer.appendChild(buttonControl);
+                });
+            } else {
+                newControlNameInputNumber.value = control.name;
+                
+                // 清空数值控制容器
+                numberControlsContainer.innerHTML = '';
+                
+                // 添加数值控制项
+                control.options.controls.forEach(controlItem => {
+                    const numberControlItem = document.createElement('div');
+                    numberControlItem.className = 'number-control-item';
+                    numberControlItem.innerHTML = `
+                        <div class="number-control-header">
+                            <span class="number-control-label">数值控制项</span>
+                            <button class="remove-number-control-btn" onclick="removeNumberControl(this)">X</button>
+                        </div>
+                        <div class="control-type-select">
+                            <div class="control-type-btn ${controlItem.type === 'slider' ? 'selected' : ''}" data-type="slider">滑块</div>
+                            <div class="control-type-btn ${controlItem.type === 'input' ? 'selected' : ''}" data-type="input">输入框</div>
+                        </div>
+                        <div class="number-control-options">
+                            <input type="text" class="number-control-name" value="${controlItem.name}" placeholder="控制项名称">
+                            <input type="text" class="number-control-key" value="${controlItem.key}" placeholder="JSON键名">
+                        </div>
+                        <div class="number-control-options">
+                            <input type="number" class="number-control-min" value="${controlItem.min}" placeholder="最小值">
+                            <input type="number" class="number-control-max" value="${controlItem.max}" placeholder="最大值">
+                        </div>
+                    `;
+                    numberControlsContainer.appendChild(numberControlItem);
+                    
+                    // 添加控制类型选择事件
+                    const controlTypeBtns = numberControlItem.querySelectorAll('.control-type-btn');
+                    controlTypeBtns.forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            controlTypeBtns.forEach(b => b.classList.remove('selected'));
+                            this.classList.add('selected');
+                        });
+                    });
+                });
+            }
+            
+            // 移除原控制
+            removeControl(id);
+            
+            addMessage(`正在编辑控制: ${control.name}`, 'outgoing');
+        }
+        
+        // 移除控制
+        function removeControl(id) {
+            const control = document.getElementById(`${id}-control`);
+            if (control) {
+                control.remove();
+                delete customControls[id];
+                addMessage(`已移除控制: ${id}`, 'outgoing');
+            }
+        }
+        
+        // 重置默认控制
+        resetControlsBtn.addEventListener('click', function() {
+            // 如果蜂鸣器控制不存在，重新创建
+            if (!document.getElementById('buzzer-control')) {
+                createControlCard('蜂鸣器', 'buzzer', 'char', {
+                    jsonKey: 'buzzer',
+                    buttons: [
+                        { label: '开启', value: 'ON' },
+                        { label: '关闭', value: 'OFF' }
+                    ]
+                });
+                customControls['buzzer'] = {
+                    name: '蜂鸣器',
+                    type: 'char',
+                    options: {
+                        jsonKey: 'buzzer',
+                        buttons: [
+                            { label: '开启', value: 'ON' },
+                            { label: '关闭', value: 'OFF' }
+                        ]
+                    }
+                };
+            }
+            
+            // 如果RGB控制不存在，重新创建
+            if (!document.getElementById('r-control')) {
+                createControlCard('RGB灯', 'r', 'number', {
+                    controls: [
+                        {
+                            name: '红色',
+                            key: 'r',
+                            min: '0',
+                            max: '255',
+                            defaultValue: '0',
+                            type: 'slider'
+                        },
+                        {
+                            name: '绿色',
+                            key: 'g',
+                            min: '0',
+                            max: '255',
+                            defaultValue: '0',
+                            type: 'slider'
+                        },
+                        {
+                            name: '蓝色',
+                            key: 'b',
+                            min: '0',
+                            max: '255',
+                            defaultValue: '0',
+                            type: 'slider'
+                        }
+                    ]
+                });
+                customControls['r'] = {
+                    name: 'RGB灯',
+                    type: 'number',
+                    options: {
+                        controls: [
+                            {
+                                name: '红色',
+                                key: 'r',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            },
+                            {
+                                name: '绿色',
+                                key: 'g',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            },
+                            {
+                                name: '蓝色',
+                                key: 'b',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            }
+                        ]
+                    }
+                };
+            }
+            
+            addMessage('已重置默认控制', 'outgoing');
+        });
+        
+        // 清除日志
+        clearLogBtn.addEventListener('click', function() {
+            messageLog.innerHTML = '';
+            addMessage('日志已清除', 'outgoing');
+        });
+        
+        // 连接MQTT代理 - 增强连接方式
+        connectBtn.addEventListener('click', function() {
+            if (isConnected) return;
+            
+            const broker = brokerInput.value;
+            const port = parseInt(portSelect.value);
+            const clientId = clientIdInput.value || 'webclient_' + Math.random().toString(16).substr(2, 8);
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+            const subscribeTopic = subscribeTopicInput.value;
+            
+            if (!broker || !subscribeTopic) {
+                addMessage('请填写代理地址和订阅主题', 'error');
+                return;
+            }
+            
+            // 创建MQTT客户端 - 增强连接配置
+            const protocol = port === 8883 || port === 8084 ? 'wss' : 'ws';
+            
+            // 针对本地和云端的不同配置
+            const isLocalhost = broker === 'localhost' || broker === '127.0.0.1';
+            
+            // 尝试不同的WebSocket路径和配置
+            const connectionAttempts = [
+                { path: '/mqtt', options: getConnectionOptions(port, clientId, username, password, isLocalhost) },
+                { path: '/ws', options: getConnectionOptions(port, clientId, username, password, isLocalhost) },
+                { path: '', options: getConnectionOptions(port, clientId, username, password, isLocalhost) },
+                { path: '/mqtt', options: getConnectionOptions(port, clientId, username, password, isLocalhost, true) },
+                { path: '/ws', options: getConnectionOptions(port, clientId, username, password, isLocalhost, true) }
+            ];
+            
+            let currentAttempt = 0;
+            
+            function tryConnect(attemptIndex) {
+                if (attemptIndex >= connectionAttempts.length) {
+                    addMessage('所有连接尝试失败，请检查EMQX配置和SSL证书', 'error');
+                    return;
+                }
+                
+                const attempt = connectionAttempts[attemptIndex];
+                const path = attempt.path;
+                const url = path ? `${protocol}://${broker}:${port}${path}` : `${protocol}://${broker}:${port}`;
+                
+                addMessage(`尝试连接 ${url} (${attemptIndex + 1}/${connectionAttempts.length})...`, 'outgoing');
+                
+                try {
+                    client = mqtt.connect(url, attempt.options);
+                    
+                    // 连接成功回调
+                    client.on('connect', () => {
+                        isConnected = true;
+                        updateConnectionStatus(true);
+                        
+                        // 订阅主题
+                        client.subscribe(subscribeTopic);
+                        addMessage(`已成功连接并订阅主题: ${subscribeTopic}`, 'incoming');
+                        addMessage(`使用的连接路径: ${path || '/ (默认)'}`, 'incoming');
+                    });
+                    
+                    // 断开连接回调
+                    client.on('close', () => {
+                        isConnected = false;
+                        updateConnectionStatus(false);
+                        addMessage('连接已断开', 'error');
+                    });
+                    
+                    // 接收消息回调
+                    client.on('message', (topic, message) => {
+                        if (topic === subscribeTopic) {
+                            try {
+                                const data = JSON.parse(message.toString());
+                                addMessage(`收到消息 [${topic}]: ${message.toString()}`, 'incoming');
+                                
+                                // 更新显示数据
+                                updateDataDisplay(data);
+                            } catch (e) {
+                                // 如果不是JSON格式，尝试解析为控制命令
+                                const messageStr = message.toString();
+                                addMessage(`收到消息 [${topic}]: ${messageStr}`, 'incoming');
+                                
+                                // 解析控制命令
+                                parseControlCommand(messageStr);
+                            }
+                        }
+                    });
+                    
+                    // 错误处理
+                    client.on('error', (error) => {
+                        console.error('MQTT错误:', error);
+                        addMessage(`连接尝试 ${attemptIndex + 1} 失败: ${error.message}`, 'error');
+                        
+                        // 如果当前连接失败，尝试下一个配置
+                        if (attemptIndex < connectionAttempts.length - 1) {
+                            addMessage(`尝试下一个连接配置...`, 'outgoing');
+                            setTimeout(() => {
+                                if (client) {
+                                    client.end();
+                                }
+                                tryConnect(attemptIndex + 1);
+                            }, 1000);
+                        } else {
+                            updateConnectionStatus(false);
+                            
+                            // 提供详细的错误诊断信息
+                            provideConnectionDiagnosis(broker, port, protocol, error);
+                        }
+                    });
+                    
+                } catch (error) {
+                    addMessage(`连接失败: ${error.message}`, 'error');
+                    updateConnectionStatus(false);
+                    
+                    // 继续尝试下一个配置
+                    if (attemptIndex < connectionAttempts.length - 1) {
+                        setTimeout(() => tryConnect(attemptIndex + 1), 1000);
+                    } else {
+                        provideConnectionDiagnosis(broker, port, protocol, error);
+                    }
+                }
+            }
+            
+            // 开始尝试连接
+            tryConnect(currentAttempt);
+        });
+
+        // 获取连接选项
+        function getConnectionOptions(port, clientId, username, password, isLocalhost, useStrictSSL = false) {
+            const options = {
+                clientId: clientId,
+                keepalive: 60,
+                protocolId: 'MQTT',
+                protocolVersion: 4,
+                clean: true,
+                reconnectPeriod: 1000,
+                connectTimeout: 4000,
+                resubscribe: true
+            };
+            
+            // 如果有用户名和密码，添加到连接选项
+            if (username) {
+                options.username = username;
+            }
+            if (password) {
+                options.password = password;
+            }
+            
+            // SSL/TLS 配置
+            if (port === 8883 || port === 8084) {
+                if (isLocalhost && !useStrictSSL) {
+                    // 对于本地连接，放宽SSL验证
+                    options.rejectUnauthorized = false;
+                    addMessage('使用宽松SSL验证模式连接本地服务器', 'outgoing');
+                } else {
+                    // 对于云端连接或严格模式，使用标准验证
+                    options.rejectUnauthorized = true;
+                }
+                
+                // 增强的SSL配置
+                options.wsOptions = {
+                    protocolVersion: 8,
+                    origin: `${window.location.protocol}//${window.location.host}`,
+                    headers: {
+                        'User-Agent': 'STM32-WebClient'
+                    }
+                };
+            }
+            
+            return options;
+        }
+
+        // 提供连接诊断信息
+        function provideConnectionDiagnosis(broker, port, protocol, error) {
+            addMessage('连接诊断信息:', 'error');
+            addMessage(`- 目标服务器: ${broker}:${port}`, 'error');
+            addMessage(`- 使用协议: ${protocol}`, 'error');
+            
+            if (port === 8084 || port === 8883) {
+                addMessage(`- SSL/TLS 连接问题可能原因:`, 'error');
+                addMessage(`  1. 服务器SSL证书无效或自签名`, 'error');
+                addMessage(`  2. 证书域名不匹配`, 'error');
+                addMessage(`  3. 服务器未正确配置SSL`, 'error');
+                addMessage(`- 解决方案:`, 'error');
+                addMessage(`  1. 检查EMQX SSL配置`, 'error');
+                addMessage(`  2. 为本地服务器生成有效证书`, 'error');
+                addMessage(`  3. 或在EMQX配置中启用SSL证书验证豁免`, 'error');
+            }
+            
+            if (broker === 'localhost' || broker === '127.0.0.1') {
+                addMessage(`- 本地连接特殊说明:`, 'error');
+                addMessage(`  确保EMQX正在运行并监听${port}端口`, 'error');
+                addMessage(`  检查防火墙设置`, 'error');
+                addMessage(`  验证EMQX的SSL配置`, 'error');
+            }
+            
+            if (error) {
+                addMessage(`- 详细错误: ${error.message}`, 'error');
+            }
+        }
+        
+        // 解析控制命令
+        function parseControlCommand(command) {
+            try {
+                const data = JSON.parse(command);
+                // 如果是JSON格式，遍历所有键值对
+                for (let key in data) {
+                    // 检查是否是蜂鸣器控制命令
+                    if (key === 'buzzer') {
+                        updateButtonState('buzzer', data[key]);
+                        continue;
+                    }
+                    
+                    // 检查是否是RGB控制命令
+                    if (key === 'r' || key === 'g' || key === 'b') {
+                        const controlItems = document.querySelectorAll('#r-control .number-control-item');
+                        controlItems.forEach(item => {
+                            const controlKeyElement = item.querySelector('.control-key');
+                            if (controlKeyElement && controlKeyElement.textContent.includes(key)) {
+                                const slider = item.querySelector('.number-control-slider');
+                                const input = item.querySelector('.number-control-input');
+                                const valueDisplay = item.querySelector('.number-value-display');
+                                
+                                if (slider) {
+                                    slider.value = data[key];
+                                    if (valueDisplay) {
+                                        valueDisplay.textContent = data[key];
+                                    }
+                                } else if (input) {
+                                    input.value = data[key];
+                                    if (valueDisplay) {
+                                        valueDisplay.textContent = data[key];
+                                    }
+                                }
+                            }
+                        });
+                        continue;
+                    }
+                    
+                    // 检查是否是自定义控制命令
+                    for (let id in customControls) {
+                        const control = customControls[id];
+                        if (control.type === 'char') {
+                            if (control.options.jsonKey === key) {
+                                // 更新按钮状态
+                                updateButtonState(id, data[key]);
+                            }
+                        } else {
+                            // 数值控制
+                            control.options.controls.forEach(controlItem => {
+                                if (controlItem.key === key) {
+                                    const controlElement = document.getElementById(`${id}-control`);
+                                    if (controlElement) {
+                                        const controlItems = controlElement.querySelectorAll('.number-control-item');
+                                        controlItems.forEach(item => {
+                                            const controlKeyElement = item.querySelector('.control-key');
+                                            if (controlKeyElement && controlKeyElement.textContent.includes(controlItem.key)) {
+                                                const slider = item.querySelector('.number-control-slider');
+                                                const input = item.querySelector('.number-control-input');
+                                                const valueDisplay = item.querySelector('.number-value-display');
+                                                if (slider) {
+                                                    slider.value = data[key];
+                                                    if (valueDisplay) {
+                                                        valueDisplay.textContent = data[key];
+                                                    }
+                                                } else if (input) {
+                                                    input.value = data[key];
+                                                    if (valueDisplay) {
+                                                        valueDisplay.textContent = data[key];
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                addMessage(`无法解析的控制命令: ${command}`, 'error');
+            }
+        }
+        
+        // 更新数据显示
+        function updateDataDisplay(data) {
+            const now = new Date();
+            const timestamp = now.getTime();
+            const timeString = now.toLocaleTimeString();
+            
+            // 生成时间标签
+            const timeLabel = now.toLocaleTimeString();
+            
+            // 添加新的时间戳和标签
+            chartData.timestamps.push(timestamp);
+            chartData.timeLabels.push(timeLabel);
+            
+            // 添加默认数据（仅当卡片存在时）
+            if (data.temperature !== undefined && document.getElementById('temperature-card')) {
+                updateDataCard('temperature', data.temperature.toFixed(1), '°C', timeString);
+                chartData.temperature.push(data.temperature);
+            }
+            
+            if (data.humidity !== undefined && document.getElementById('humidity-card')) {
+                updateDataCard('humidity', data.humidity.toFixed(1), '%', timeString);
+                chartData.humidity.push(data.humidity);
+            }
+            
+            // 添加自定义数据
+            for (let key in customDataCards) {
+                if (data[key] !== undefined) {
+                    updateDataCard(key, data[key], customDataCards[key].unit || '', timeString);
+                    if (!chartData[key]) chartData[key] = [];
+                    chartData[key].push(data[key]);
+                }
+            }
+            
+            // 截断数据，保持指定时间范围内的数据点
+            truncateDataToTimeRange();
+            
+            // 更新图表 - 使用requestAnimationFrame优化动画性能
+            requestAnimationFrame(() => {
+                updateChart();
+            });
+        }
+        
+        // 根据时间范围截断数据
+        function truncateDataToTimeRange() {
+            const currentTime = Date.now();
+            const timeLimit = timeRange * 60 * 1000; // 转换为毫秒
+            
+            // 找到第一个在时间范围内的数据点的索引
+            let startIndex = 0;
+            for (let i = 0; i < chartData.timestamps.length; i++) {
+                if (currentTime - chartData.timestamps[i] <= timeLimit) {
+                    startIndex = i;
+                    break;
+                }
+            }
+            
+            // 如果所有数据都超出了时间范围，保留最后一个数据点
+            if (startIndex >= chartData.timestamps.length - 1) {
+                startIndex = Math.max(0, chartData.timestamps.length - 1);
+            }
+            
+            // 如果有需要截断的数据
+            if (startIndex > 0) {
+                // 截断时间戳和标签
+                chartData.timestamps.splice(0, startIndex);
+                chartData.timeLabels.splice(0, startIndex);
+                
+                // 截断默认数据（仅当卡片存在时）
+                if (document.getElementById('temperature-card')) {
+                    chartData.temperature.splice(0, startIndex);
+                }
+                if (document.getElementById('humidity-card')) {
+                    chartData.humidity.splice(0, startIndex);
+                }
+                
+                // 截断自定义数据
+                for (let key in customDataCards) {
+                    if (chartData[key] && chartData[key].length > startIndex) {
+                        chartData[key].splice(0, startIndex);
+                    }
+                }
+            }
+        }
+        
+        // 更新数据卡片
+        function updateDataCard(key, value, unit, timeString) {
+            const valueElement = document.getElementById(`${key}-value`);
+            const timeElement = document.getElementById(`${key}-time`);
+            
+            if (valueElement && timeElement) {
+                valueElement.textContent = `${value} ${unit}`.trim();
+                timeElement.textContent = timeString;
+            }
+        }
+        
+        // 断开连接
+        disconnectBtn.addEventListener('click', function() {
+            if (client && isConnected) {
+                client.end();
+                isConnected = false;
+                updateConnectionStatus(false);
+                addMessage('已断开连接', 'outgoing');
+            }
+        });
+        
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = '已连接';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = '未连接';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+        
+        // 添加消息到日志
+        function addMessage(text, type) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageElement.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${text}`;
+            
+            messageLog.appendChild(messageElement);
+            messageLog.scrollTop = messageLog.scrollHeight;
+        }
+        
+        // 更新按钮状态的函数
+        function updateButtonState(id, command) {
+            // 查找对应的控制
+            const control = customControls[id];
+            if (!control) return;
+            
+            if (control.type === 'char') {
+                // 找到所有按钮
+                const buttons = document.querySelectorAll(`#${id}-control .control-button`);
+                
+                // 重置所有按钮状态
+                buttons.forEach(button => {
+                    button.classList.remove('active', 'inactive');
+                });
+                
+                // 找到匹配的按钮并设置状态
+                control.options.buttons.forEach((button, index) => {
+                    if (button.value === command) {
+                        if (buttons[index]) {
+                            buttons[index].classList.add('active');
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 初始化图表
+        function initChart() {
+            const ctx = document.getElementById('data-chart').getContext('2d');
+            
+            // 创建初始数据集
+            const datasets = [];
+            
+            // 添加默认数据（仅当卡片存在时）
+            if (document.getElementById('temperature-card')) {
+                datasets.push({
+                    label: '温度',
+                    data: chartData.temperature,
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    hidden: displayMode !== 'all' && displayMode !== 'temperature',
+                    spanGaps: false
+                });
+            }
+            
+            if (document.getElementById('humidity-card')) {
+                datasets.push({
+                    label: '湿度',
+                    data: chartData.humidity,
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    hidden: displayMode !== 'all' && displayMode !== 'humidity',
+                    spanGaps: false
+                });
+            }
+            
+            // 添加自定义数据的数据集
+            for (let key in customDataCards) {
+                if (!chartData[key]) {
+                    chartData[key] = [];
+                }
+                
+                const colorClasses = [
+                    'rgb(75, 192, 192)',
+                    'rgb(153, 102, 255)',
+                    'rgb(255, 159, 64)',
+                    'rgb(255, 205, 86)',
+                    'rgb(201, 203, 207)'
+                ];
+                
+                const colorIndex = Object.keys(customDataCards).indexOf(key) % colorClasses.length;
+                
+                datasets.push({
+                    label: customDataCards[key].name,
+                    data: chartData[key],
+                    borderColor: colorClasses[colorIndex],
+                    backgroundColor: colorClasses[colorIndex].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+                    tension: 0.4,
+                    fill: true,
+                    hidden: displayMode !== 'all' && displayMode !== key,
+                    spanGaps: false
+                });
+            }
+            
+            dataChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.timeLabels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 500,
+                        easing: 'easeOutQuart'
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            offset: false,
+                            ticks: {
+                                maxTicksLimit: 10,
+                                autoSkip: true,
+                                maxRotation: 0,
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            },
+                            bounds: 'data'
+                        },
+                        y: {
+                            display: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            beginAtZero: false,
+                            offset: false,
+                            ticks: {
+                                color: 'rgba(255, 255, 255, 0.7)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                color: 'rgba(255, 255, 255, 0.8)'
+                            },
+                            // 启用图例点击事件，并添加自定义处理
+                            onClick: function(e, legendItem, legend) {
+                                const index = legendItem.datasetIndex;
+                                const dataset = this.chart.data.datasets[index];
+                                const meta = this.chart.getDatasetMeta(index);
+                                
+                                // 切换数据集的可见性
+                                meta.hidden = meta.hidden === null ? !dataset.hidden : null;
+                                
+                                // 更新显示模式
+                                updateDisplayModeFromLegend();
+                                
+                                // 更新图表
+                                this.chart.update();
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '环境数据趋势',
+                            color: 'rgba(255, 255, 255, 0.9)'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                            titleColor: 'rgba(255, 255, 255, 0.9)',
+                            bodyColor: 'rgba(255, 255, 255, 0.8)'
+                        }
+                    },
+                    elements: {
+                        line: {
+                            tension: 0.4
+                        },
+                        point: {
+                            radius: 2,
+                            hoverRadius: 4
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    },
+                    layout: {
+                        padding: {
+                            left: 0,
+                            right: 0,
+                            top: 0,
+                            bottom: 0
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 根据图例状态更新显示模式
+        function updateDisplayModeFromLegend() {
+            if (!dataChart) return;
+            
+            const datasets = dataChart.data.datasets;
+            let visibleDatasets = [];
+            
+            // 检查哪些数据集是可见的
+            for (let i = 0; i < datasets.length; i++) {
+                const meta = dataChart.getDatasetMeta(i);
+                if (!meta.hidden) {
+                    visibleDatasets.push(datasets[i].label);
+                }
+            }
+            
+            // 根据可见数据集更新显示模式
+            if (visibleDatasets.length === datasets.length) {
+                // 所有数据集都可见
+                displayMode = 'all';
+                dataDisplaySelect.value = 'all';
+            } else if (visibleDatasets.length === 1) {
+                // 只有一个数据集可见
+                const visibleLabel = visibleDatasets[0];
+                if (visibleLabel === '温度') {
+                    displayMode = 'temperature';
+                    dataDisplaySelect.value = 'temperature';
+                } else if (visibleLabel === '湿度') {
+                    displayMode = 'humidity';
+                    dataDisplaySelect.value = 'humidity';
+                } else {
+                    // 自定义数据集
+                    for (let key in customDataCards) {
+                        if (customDataCards[key].name === visibleLabel) {
+                            displayMode = key;
+                            dataDisplaySelect.value = key;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // 多个但不是所有数据集可见，设置为"全部显示"但实际是部分显示
+                displayMode = 'all';
+                dataDisplaySelect.value = 'all';
+            }
+            
+            addMessage(`显示模式已更改为: ${dataDisplaySelect.options[dataDisplaySelect.selectedIndex].text}`, 'outgoing');
+        }
+        
+        // 更新图表
+        function updateChart() {
+            if (dataChart) {
+                dataChart.data.labels = chartData.timeLabels;
+                
+                // 更新默认数据（仅当卡片存在时）
+                let datasetIndex = 0;
+                
+                if (document.getElementById('temperature-card')) {
+                    dataChart.data.datasets[datasetIndex].data = chartData.temperature;
+                    dataChart.data.datasets[datasetIndex].hidden = displayMode !== 'all' && displayMode !== 'temperature';
+                    datasetIndex++;
+                }
+                
+                if (document.getElementById('humidity-card')) {
+                    dataChart.data.datasets[datasetIndex].data = chartData.humidity;
+                    dataChart.data.datasets[datasetIndex].hidden = displayMode !== 'all' && displayMode !== 'humidity';
+                    datasetIndex++;
+                }
+                
+                // 更新自定义数据的数据集
+                for (let key in customDataCards) {
+                    if (dataChart.data.datasets[datasetIndex]) {
+                        dataChart.data.datasets[datasetIndex].data = chartData[key] || [];
+                        dataChart.data.datasets[datasetIndex].hidden = displayMode !== 'all' && displayMode !== key;
+                    }
+                    datasetIndex++;
+                }
+                
+                // 使用动画更新图表
+                dataChart.update('active');
+            }
+        }
+        
+        // 时间范围选择事件
+        timeRangeSelect.addEventListener('change', function() {
+            timeRange = parseInt(this.value);
+            
+            // 立即根据新的时间范围截断数据
+            truncateDataToTimeRange();
+            
+            // 更新图表
+            updateChart();
+            
+            addMessage(`时间范围已更改为 ${timeRange} 分钟`, 'outgoing');
+        });
+        
+        // 数据显示选择事件
+        dataDisplaySelect.addEventListener('change', function() {
+            displayMode = this.value;
+            
+            // 更新图表
+            updateChart();
+            
+            addMessage(`数据显示模式已更改为: ${this.options[this.selectedIndex].text}`, 'outgoing');
+        });
+        
+        // 初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            // 加载保存的配置
+            loadConfig();
+            
+            // 初始化默认控制项到customControls对象
+            if (!customControls['buzzer']) {
+                customControls['buzzer'] = {
+                    name: '蜂鸣器',
+                    type: 'char',
+                    options: {
+                        jsonKey: 'buzzer',
+                        buttons: [
+                            { label: '开启', value: 'ON' },
+                            { label: '关闭', value: 'OFF' }
+                        ]
+                    }
+                };
+            }
+            
+            if (!customControls['r']) {
+                customControls['r'] = {
+                    name: 'RGB灯',
+                    type: 'number',
+                    options: {
+                        controls: [
+                            {
+                                name: '红色',
+                                key: 'r',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            },
+                            {
+                                name: '绿色',
+                                key: 'g',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            },
+                            {
+                                name: '蓝色',
+                                key: 'b',
+                                min: '0',
+                                max: '255',
+                                defaultValue: '0',
+                                type: 'slider'
+                            }
+                        ]
+                    }
+                };
+            }
+            
+            // 初始化图表
+            initChart();
+            
+            // 为RGB滑块添加事件监听
+            const rgbSliders = document.querySelectorAll('#r-control .number-control-slider');
+            rgbSliders.forEach(slider => {
+                slider.addEventListener('input', function() {
+                    const valueDisplay = this.nextElementSibling;
+                    if (valueDisplay && valueDisplay.classList.contains('number-value-display')) {
+                        valueDisplay.textContent = this.value;
+                    }
+                });
+            });
+            
+            // 为默认数值控制项添加控制类型选择事件
+            document.querySelectorAll('.control-type-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const controlTypeBtns = this.parentElement.querySelectorAll('.control-type-btn');
+                    controlTypeBtns.forEach(b => b.classList.remove('selected'));
+                    this.classList.add('selected');
+                });
+            });
+            
+            // 添加示例数据（用于演示）
+            setTimeout(() => {
+                if (!isConnected) {
+                    addMessage('点击"连接"按钮开始接收数据', 'incoming');
+                    addMessage('系统将自动尝试不同的WebSocket连接路径', 'incoming');
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
